@@ -30,6 +30,7 @@ export interface SearchParams {
 export interface ToolResponse {
   flights: Flight[];
   summary: string;
+  sources?: { title: string; uri: string }[];
 }
 
 export type LiveStatus = 'disconnected' | 'connecting' | 'connected' | 'error';

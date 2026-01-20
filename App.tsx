@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Settings, User, Navigation, Map as MapIcon, Calendar as CalendarIcon, Search, Send, ArrowRight, Loader2 } from 'lucide-react';
+import { Mic, Settings, User, Navigation, Map as MapIcon, Calendar as CalendarIcon, Search, Send, ArrowRight, Loader2, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { FlightCard } from './components/FlightCard';
 import { PriceChart } from './components/PriceChart';
 import { LiveService, runTextQuery } from './services/geminiService';
-import { Flight, LiveStatus } from './types';
+import { Flight, LiveStatus, ToolResponse } from './types';
 
 // Check for API Key
 const API_KEY = process.env.API_KEY;
@@ -14,6 +14,7 @@ export default function App() {
   const [status, setStatus] = useState<LiveStatus>('disconnected');
   const [flights, setFlights] = useState<Flight[]>([]);
   const [searchSummary, setSearchSummary] = useState<string>("Ready to plan your trip.");
+  const [sources, setSources] = useState<{title: string, uri: string}[]>([]);
   const [showKeyModal, setShowKeyModal] = useState(!API_KEY);
   const [activeView, setActiveView] = useState<View>('search');
   
@@ -25,7 +26,6 @@ export default function App() {
   const [audioLevel, setAudioLevel] = useState(0);
   
   const liveService = useRef<LiveService | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (API_KEY) {
@@ -37,10 +37,11 @@ export default function App() {
           for(let i=0; i<data.length; i+=100) sum += Math.abs(data[i]);
           setAudioLevel(Math.min(1, sum / (data.length / 100) * 5));
         },
-        onFlightsFound: (foundFlights, summary) => {
-          setFlights(foundFlights);
-          setSearchSummary(summary);
-          setActiveView('search'); // Force switch to search view
+        onFlightsFound: (response: ToolResponse) => {
+          setFlights(response.flights);
+          setSearchSummary(response.summary);
+          setSources(response.sources || []);
+          setActiveView('search');
         },
         onTranscript: () => {}
       });
@@ -66,17 +67,16 @@ export default function App() {
     const query = inputText;
     setInputText('');
     setIsProcessingText(true);
-    setSearchSummary("Processing your request...");
+    setSearchSummary("Searching live sources...");
+    setFlights([]);
+    setSources([]);
 
     const result = await runTextQuery(API_KEY, query);
     
-    if (result.type === 'flights') {
-      setFlights(result.flights);
-      setSearchSummary(result.summary);
-      setActiveView('search');
-    } else {
-      setSearchSummary(result.text);
-    }
+    setFlights(result.flights);
+    setSearchSummary(result.summary);
+    setSources(result.sources || []);
+    setActiveView('search');
     
     setIsProcessingText(false);
   };
@@ -102,12 +102,14 @@ export default function App() {
   // --- Views ---
 
   const SearchView = () => (
-    <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pb-24">
+    <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pb-32">
       <div className="lg:col-span-2 space-y-6">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        
+        {/* Dynamic Context Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden transition-all duration-500">
           <div className="relative z-10">
             <h2 className="text-2xl font-bold mb-2">
-              {flights.length > 0 ? "Found Options" : "Where to next?"}
+              {isProcessingText ? "Analyzing..." : flights.length > 0 ? "Found Options" : "Where to next?"}
             </h2>
             <p className="text-blue-100 max-w-lg leading-relaxed">
               {searchSummary}
@@ -116,8 +118,9 @@ export default function App() {
           <div className="absolute right-0 bottom-0 translate-x-1/3 translate-y-1/3 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
         </div>
 
+        {/* Flight List */}
         {flights.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-800">Top Recommendations</h3>
               <span className="text-sm text-slate-500">{flights.length} results found</span>
@@ -126,12 +129,17 @@ export default function App() {
               <FlightCard key={flight.id} flight={flight} />
             ))}
           </div>
+        ) : isProcessingText ? (
+           <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-4">
+              <Loader2 className="animate-spin text-blue-500" size={40} />
+              <p>Scanning global flight data...</p>
+           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-4">
               <Navigation size={40} className="text-slate-300" />
             </div>
-            <p className="max-w-xs text-center">Tap the microphone or type below to start planning your next journey.</p>
+            <p className="max-w-xs text-center">Tap the microphone or type below to start planning.</p>
           </div>
         )}
       </div>
@@ -139,20 +147,37 @@ export default function App() {
       <div className="space-y-6">
           <PriceChart />
           
+          {/* Sources Widget */}
+          {sources.length > 0 && (
+             <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm animate-fade-in">
+                <div className="flex items-center gap-2 mb-4">
+                   <LinkIcon size={16} className="text-slate-400" />
+                   <h3 className="font-semibold text-slate-800">Search Sources</h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                   {sources.slice(0, 4).map((source, i) => (
+                      <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="text-xs text-blue-600 truncate hover:underline block bg-blue-50 p-2 rounded-lg">
+                         {source.title}
+                      </a>
+                   ))}
+                </div>
+             </div>
+          )}
+          
           <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-            <h3 className="font-semibold text-slate-800 mb-4">Voice Commands</h3>
+            <h3 className="font-semibold text-slate-800 mb-4">Quick Commands</h3>
             <ul className="space-y-3">
-                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setInputText("Show multi-city routes from NYC to Tokyo")}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  "Show multi-city routes from NYC to Tokyo."
+                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors group" onClick={() => setInputText("Show flights from NYC to London next week")}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0 group-hover:scale-150 transition-transform" />
+                  "Flights from NYC to London"
                 </li>
-                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setInputText("Add a stop in Paris for 2 nights")}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  "Add a stop in Paris for 2 nights."
+                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors group" onClick={() => setInputText("Flights from Singapore to Tokyo with a stop in Taipei")}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0 group-hover:scale-150 transition-transform" />
+                  "SIN to TYO via TPE"
                 </li>
-                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setInputText("Filter for flights under $800")}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  "Filter for flights under $800."
+                <li className="text-sm text-slate-600 flex gap-2 items-start cursor-pointer hover:text-blue-600 transition-colors group" onClick={() => setInputText("Cheapest flights to Bali in June")}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0 group-hover:scale-150 transition-transform" />
+                  "Cheapest flights to Bali"
                 </li>
             </ul>
           </div>
@@ -178,7 +203,7 @@ export default function App() {
       <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
         <div className="flex items-center justify-between mb-8">
            <h2 className="text-2xl font-bold text-slate-800">Trip Calendar</h2>
-           <button className="text-blue-600 font-medium">Sync with Google Calendar</button>
+           <button className="text-blue-600 font-medium hover:underline">Sync with Google Calendar</button>
         </div>
         <div className="grid grid-cols-7 gap-4 text-center mb-4">
            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
@@ -250,8 +275,8 @@ export default function App() {
                {activeView === 'profile' && 'Travel Profile'}
              </h1>
              <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                <span className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
-                {status === 'connected' ? 'Listening...' : 'Ready'}
+                <span className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-green-500 animate-pulse' : status === 'error' ? 'bg-red-500' : 'bg-slate-300'}`} />
+                {status === 'connected' ? 'Listening...' : status === 'error' ? 'Connection Error' : 'Ready'}
              </p>
           </div>
           <div className="flex items-center gap-4">
@@ -271,7 +296,12 @@ export default function App() {
            {activeView === 'map' && <MapView />}
            {activeView === 'calendar' && <CalendarView />}
            {activeView === 'profile' && (
-             <div className="flex items-center justify-center h-full text-slate-400">Profile Settings Placeholder</div>
+             <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
+               <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
+                 <User size={32} />
+               </div>
+               <p>User preferences and history would go here.</p>
+             </div>
            )}
         </div>
 
@@ -285,7 +315,7 @@ export default function App() {
                 type="text" 
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask AeroFlow..."
+                placeholder="Ask AeroFlow... (e.g. 'Flights to Paris')"
                 className="w-full bg-transparent border-none outline-none text-slate-800 placeholder-slate-400 font-medium"
                 disabled={isProcessingText}
               />
@@ -298,9 +328,11 @@ export default function App() {
               className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
                 status === 'connected' 
                   ? 'bg-red-500 text-white shadow-lg shadow-red-200' 
-                  : inputText.length > 0
-                    ? 'bg-slate-100 text-slate-400' // Dim mic if typing
-                    : 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700'
+                  : status === 'error'
+                    ? 'bg-orange-500 text-white'
+                    : inputText.length > 0
+                      ? 'bg-slate-100 text-slate-400' 
+                      : 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700'
               }`}
             >
               {status === 'connected' ? (
@@ -312,6 +344,8 @@ export default function App() {
                       ))}
                    </div>
                 </>
+              ) : status === 'error' ? (
+                 <AlertCircle size={20} />
               ) : inputText.length > 0 ? (
                  <button onClick={handleTextSubmit} className="w-full h-full flex items-center justify-center bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors">
                     <ArrowRight size={20} />
