@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Settings, User, Navigation, Map as MapIcon, Calendar as CalendarIcon, Search, Send, ArrowRight, Loader2, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { FlightCard } from './components/FlightCard';
 import { PriceChart } from './components/PriceChart';
+import { FlightMap } from './components/FlightMap';
 import { LiveService, runTextQuery } from './services/geminiService';
 import { Flight, LiveStatus, ToolResponse } from './types';
 
@@ -185,19 +186,6 @@ export default function App() {
     </div>
   );
 
-  const MapView = () => (
-    <div className="h-full w-full bg-slate-200 rounded-2xl overflow-hidden relative group">
-      <img src="https://picsum.photos/1200/800?grayscale" className="w-full h-full object-cover" alt="World Map" />
-      <div className="absolute inset-0 bg-slate-900/10 flex flex-col items-center justify-center">
-        <div className="bg-white/90 backdrop-blur-md p-6 rounded-2xl shadow-xl max-w-sm text-center">
-          <MapIcon size={48} className="mx-auto text-blue-500 mb-4" />
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Interactive Map</h3>
-          <p className="text-slate-600">Visualize your multi-stop route and explore layover cities.</p>
-        </div>
-      </div>
-    </div>
-  );
-
   const CalendarView = () => (
     <div className="max-w-5xl mx-auto">
       <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
@@ -293,7 +281,7 @@ export default function App() {
         {/* View Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth">
            {activeView === 'search' && <SearchView />}
-           {activeView === 'map' && <MapView />}
+           {activeView === 'map' && <FlightMap />}
            {activeView === 'calendar' && <CalendarView />}
            {activeView === 'profile' && (
              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
