@@ -1,0 +1,7 @@
+{
+  "name": "AeroFlow",
+  "description": "A voice-first, AI-powered travel analyst for planning complex multi-stop journeys.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
